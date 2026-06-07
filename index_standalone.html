@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>一夜持股法 量化分析 V3</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Microsoft YaHei',sans-serif;background:#0d1117;color:#c9d1d9;padding:8px;max-width:800px;margin:0 auto}
+.top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.top h1{font-size:18px;color:#58a6ff;white-space:nowrap}
+.top input{flex:1;min-width:120px;padding:10px;border:1px solid #30363d;border-radius:8px;background:#0d1117;color:#fff;font-size:15px}
+.top button{padding:10px 16px;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}
+.btn-go{background:#238636;color:#fff}
+.btn-scan{background:#da3633;color:#fff}
+.qb span{display:inline-block;padding:4px 8px;margin:2px;border-radius:4px;background:#21262d;color:#8b949e;font-size:11px;cursor:pointer;border:1px solid #30363d}
+#status{font-size:11px;color:#8b949e;margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap}
+#status span{padding:2px 8px;border-radius:4px;font-size:10px;border:1px solid #30363d}
+.card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;margin:8px 0}
+.card h3{font-size:12px;color:#8b949e;margin-bottom:8px}
+.verdict{font-size:22px;font-weight:900;text-align:center;padding:8px}
+.pass{color:#3fb950}.fail{color:#f85149}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{flex:1;min-width:140px}
+table{width:100%;border-collapse:collapse;font-size:11px;margin:4px 0}
+td,th{border:1px solid #21262d;padding:4px 6px;text-align:center}
+th{background:#0d1117;color:#8b949e;font-size:10px}
+.chip{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;margin:1px}
+.cg{background:#0d3320;color:#3fb950;border:1px solid #238636}
+.cb{background:#331010;color:#f85149;border:1px solid #da3633}
+.ci{background:#1a1a2e;color:#8b949e;border:1px solid #30363d}
+.bar{height:6px;background:#21262d;border-radius:3px;margin:2px 0}
+.bf{height:100%;border-radius:3px}
+.advice{font-size:40px;font-weight:900;text-align:center}
+.ld{text-align:center;padding:20px;color:#8b949e}
+.spinner{border:3px solid #21262d;border-top:3px solid #58a6ff;border-radius:50%;width:32px;height:32px;animation:spin 1s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:480px){.row>*{min-width:100%}.top h1{font-size:15px}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>一夜持股法 V3</h1>
+  <input id="code" type="text" placeholder="输入6位代码" maxlength="6" onkeydown="if(event.key==='Enter')analyze()">
+  <button class="btn-go" onclick="analyze()">分析</button>
+  <button class="btn-scan" onclick="screenAll()">全市场</button>
+</div>
+<div class="qb"><span onclick="analyze('002230')">科大讯飞</span><span onclick="analyze('300124')">汇川技术</span><span onclick="analyze('002415')">海康威视</span><span onclick="analyze('600519')">贵州茅台</span><span onclick="analyze('000858')">五粮液</span></div>
+<div id="status"></div>
+
+<div class="card" id="verdictCard" style="display:none">
+  <div class="verdict" id="verdictText" style="color:#8b949e">--</div>
+  <div id="verdictReason" style="font-size:12px;color:#8b949e;text-align:center"></div>
+  <div id="verdictScore" style="font-size:14px;color:#58a6ff;text-align:center;margin-top:4px"></div>
+</div>
+
+<div class="row" id="infoRow" style="display:none">
+  <div class="card"><h3>实时价格</h3><div id="priceBox"></div></div>
+  <div class="card"><h3>大盘</h3><div id="idxBox"></div></div>
+  <div class="card"><h3>板块</h3><div id="sectBox"></div></div>
+</div>
+
+<div class="card" id="filterCard" style="display:none"><h3>策略筛选 (Rules 3/4/5)</h3><table id="filterTable"></table></div>
+<div class="card" id="signalCard" style="display:none"><h3>进场信号 (Part 2)</h3><div id="signalBox" class="row"></div></div>
+
+<div class="card" id="deepCard" style="display:none">
+  <h3>实时深度分析 | <span id="deepLive" style="color:#3fb950">LIVE</span> | 更新:<span id="deepT">--</span></h3>
+  <div class="row">
+    <div class="card"><h3>主力资金</h3><div id="moneyBox"></div></div>
+    <div class="card"><h3>实时信号</h3><div id="realtimeSigs"></div></div>
+    <div class="card"><h3>买入建议</h3><div id="adviceBox"></div></div>
+  </div>
+</div>
+
+<div class="card" id="screenCard" style="display:none">
+  <h3>全市场筛选 | <span id="screenInfo"></span></h3>
+  <div style="overflow-x:auto"><table id="screenTable"><thead><tr><th>#</th><th>代码</th><th>名称</th><th>现价</th><th>涨幅</th><th>振幅</th><th>成交(亿)</th><th>信号B</th><th>信号C</th><th>得分</th></tr></thead><tbody id="screenBody"></tbody></table></div>
+</div>
+
+<script>
+// ========== 数据层 ==========
+var CORS = 'https://corsproxy.io/?';
+var symbol = '002230';
+var deepTimer = null;
+var idxCache = {};
+
+function fetchSina(codes) {
+    var url = CORS + encodeURIComponent('https://hq.sinajs.cn/list=' + codes.join(','));
+    return fetch(url).then(function(r) { return r.text(); });
+}
+
+function parseSina(text) {
+    var results = {};
+    var lines = text.split('\n');
+    lines.forEach(function(line) {
+        if (line.indexOf('=') === -1 || line.indexOf('""') !== -1) return;
+        var cp = line.split('=')[0].replace('var hq_str_', '');
+        var data = line.split('"')[1].split(',');
+        if (data.length < 10) return;
+        results[cp] = {
+            name: data[0], open: parseFloat(data[1])||0,
+            prev_close: parseFloat(data[2])||0, price: parseFloat(data[3])||0,
+            high: parseFloat(data[4])||0, low: parseFloat(data[5])||0,
+            vol: parseFloat(data[8])||0, amt: (parseFloat(data[9])||0)/10000
+        };
+    });
+    return results;
+}
+
+// ========== 策略引擎 (纯JS) ==========
+function analyzeStock(quote, idxData) {
+    var q = quote;
+    var price = q.price, open = q.open, high = q.high, low = q.low;
+    var prev = q.prev_close, vol = q.vol, amt = q.amt;
+    if (!price || !prev) return null;
+
+    var pct = (price - prev) / prev * 100;
+    // Rule 5: 股价3-40
+    if (price < 3 || price > 40) return {fail: true, reason: '股价'+price+'超出3-40范围', filters:[], signals:[], score:0};
+
+    // 估算量比和换手率
+    var volRatio = 1.0; // 无法获均量, 默认1
+    var turnover = 3;   // 默认3%
+    var ampl = high > 0 ? (high - low) / price * 100 : 0;
+    var pos = high > low ? (price - low) / (high - low) : 0.5;
+
+    // 硬性排除
+    if (pct <= 0 || pct >= 9.8) return {fail: true, reason: '涨幅'+pct.toFixed(1)+'%不满足', filters:[], signals:[], score:0};
+    if (amt < 10000) return {fail: true, reason: '成交额'+amt.toFixed(0)+'万不足', filters:[], signals:[], score:0};
+
+    // Rule 1: 大盘否决
+    var veto = true;
+    if (idxData) {
+        var sz = idxData['sh000001'], cy = idxData['sz399006'];
+        if (sz && cy) veto = (sz.price >= sz.ma5) && (cy.price >= cy.ma5);
+    }
+
+    // 策略评分
+    var score = 0;
+    score += Math.min(25, Math.max(0, pct * 4));           // 涨幅
+    score += Math.min(15, pos * 15);                        // 位置
+    score += Math.min(15, Math.max(0, amt / 4000));         // 流动性
+    score += Math.min(10, ampl * 2);                        // 振幅
+    var sigB = price >= high * 0.98 && amt > 20000;
+    var sigC = ampl < 1.5 && pos >= 0.6;
+    score += sigB ? 20 : Math.min(10, pos * 10);
+    score += sigC ? 10 : (ampl < 8 ? 5 : 0);
+    score = Math.round(Math.min(100, score));
+
+    // 判定
+    var verdict, vc;
+    if (veto && sigB && sigC && score >= 60) { verdict = '强烈推荐'; vc = '#3fb950'; }
+    else if (veto && sigB && score >= 45) { verdict = '建议买入'; vc = '#58a6ff'; }
+    else if (veto && score >= 30) { verdict = '可关注'; vc = '#f39c12'; }
+    else if (veto) { verdict = '继续观察'; vc = '#8b949e'; }
+    else { verdict = '大盘否决·空仓'; vc = '#f85149'; }
+
+    // 主力资金判断
+    var moneyLevel, moneySignal, bigOrder;
+    if (volRatio >= 2 && pct > 2) { moneyLevel = 3; moneySignal = '主力大幅流入'; }
+    else if (volRatio >= 1.5 && pct > 1) { moneyLevel = 2; moneySignal = '主力温和流入'; }
+    else if (volRatio >= 1 && pct > 0) { moneyLevel = 1; moneySignal = '散户推动'; }
+    else if (pct < -2) { moneyLevel = -3; moneySignal = '恐慌抛售'; }
+    else if (pct < 0) { moneyLevel = -2; moneySignal = '主力出货'; }
+    else { moneyLevel = 0; moneySignal = '无方向'; }
+    bigOrder = pos >= 0.7 && amt > 20000 ? '大单净买入' : (pos <= 0.3 && amt > 20000 ? '大单净卖出' : '大单平衡');
+
+    var action, level;
+    if (!veto) { action = '空仓'; level = 'D'; }
+    else if (!sigB && !sigC && score < 30) { action = '不宜操作'; level = 'D'; }
+    else if (sigB && sigC && score >= 60) { action = '建议买入'; level = 'A'; }
+    else if (sigB && score >= 45) { action = '可以买入'; level = 'B'; }
+    else if (score >= 30) { action = '观察偏多'; level = 'C'; }
+    else { action = '不宜买入'; level = 'F'; }
+
+    return {
+        fail: false, verdict: verdict, vc: vc, score: score,
+        price: price, pct: pct, open: open, high: high, low: low, ampl: ampl, pos: pos,
+        volRatio: volRatio, turnover: turnover, amt: amt,
+        sigB: sigB, sigC: sigC, veto: veto,
+        moneyLevel: moneyLevel, moneySignal: moneySignal, bigOrder: bigOrder,
+        action: action, level: level,
+        filters: [
+            {label:'股价3-40元', pass: price>=3&&price<=40, val: price.toFixed(2)+'元'},
+            {label:'涨幅>0且<9.8%', pass: pct>0&&pct<9.8, val: pct.toFixed(2)+'%'},
+            {label:'成交额≥1亿', pass: amt>=10000, val: (amt/10000).toFixed(1)+'亿'},
+            {label:'日内位置≥50%', pass: pos>=0.5, val: (pos*100).toFixed(0)+'%'},
+            {label:'尾盘突破', pass: sigB, val: sigB?'PASS':'FAIL'},
+            {label:'抗抛压横盘', pass: sigC, val: sigC?'PASS':(ampl.toFixed(1)+'%振幅')},
+        ],
+        signals: [
+            {label:'信号B:尾盘突破', pass: sigB, reason: price>=high*0.98?'收盘接近最高':'距最高'+((1-price/high)*100).toFixed(1)+'%'},
+            {label:'信号C:抗抛压', pass: sigC, reason: ampl<1.5?'窄幅'+ampl.toFixed(1)+'%':'振幅偏大'},
+        ],
+    };
+}
+
+// ========== 渲染 ==========
+var currentResult = null;
+
+function render(r) {
+    if (!r || r.fail) {
+        document.getElementById('verdictText').textContent = '不符合条件';
+        document.getElementById('verdictText').style.color = '#f85149';
+        document.getElementById('verdictReason').textContent = r ? r.reason : '数据异常';
+        document.getElementById('verdictScore').textContent = '';
+        return;
+    }
+    currentResult = r;
+
+    // 显示所有卡片
+    ['verdictCard','infoRow','filterCard','signalCard','deepCard'].forEach(function(id) {
+        document.getElementById(id).style.display = 'block';
+    });
+
+    // 判定
+    document.getElementById('verdictText').textContent = r.verdict;
+    document.getElementById('verdictText').style.color = r.vc;
+    document.getElementById('verdictReason').textContent = (r.veto?'':'[否决] ') + '得分:' + r.score;
+    document.getElementById('verdictScore').textContent = '';
+
+    // 价格
+    var pc = r.pct >= 0 ? 'pass' : 'fail';
+    document.getElementById('priceBox').innerHTML =
+        '<div style="font-size:20px;font-weight:700">' + r.price.toFixed(2) +
+        ' <span style="font-size:14px;color:' + (r.pct>=0?'#3fb950':'#f85149') + '">' + (r.pct>=0?'+':'') + r.pct.toFixed(2) + '%</span></div>' +
+        '<div style="font-size:11px;margin-top:4px">O:' + r.open.toFixed(2) + ' H:' + r.high.toFixed(2) + ' L:' + r.low.toFixed(2) + '</div>' +
+        '<div style="font-size:11px">振幅:' + r.ampl.toFixed(1) + '% | 位置:' + (r.pos*100).toFixed(0) + '% | 成交:' + (r.amt/10000).toFixed(1) + '亿</div>';
+
+    // 大盘
+    var ih = '';
+    if (idxCache['sh000001']) {
+        var sz = idxCache['sh000001'];
+        ih += '<span class="chip ' + (sz.price>=sz.ma5?'cg':'cb') + '">上证 ' + sz.price.toFixed(0) + ' vs MA5(' + sz.ma5.toFixed(0) + ')</span> ';
+    }
+    if (idxCache['sz399006']) {
+        var cy = idxCache['sz399006'];
+        ih += '<span class="chip ' + (cy.price>=cy.ma5?'cg':'cb') + '">创业板 ' + cy.price.toFixed(0) + ' vs MA5(' + cy.ma5.toFixed(0) + ')</span>';
+    }
+    ih += '<div style="margin-top:4px"><span class="chip ' + (r.veto?'cg':'cb') + '">' + (r.veto?'大盘达标':'一票否决') + '</span></div>';
+    document.getElementById('idxBox').innerHTML = ih;
+
+    // 板块
+    document.getElementById('sectBox').innerHTML = '<span class="chip ci">基于个股估算</span><div style="font-size:11px;color:#8b949e;margin-top:4px">单股分析模式</div>';
+
+    // 过滤器表格
+    var fh = '<tr><th>条件</th><th>结果</th><th>详情</th></tr>';
+    r.filters.forEach(function(f) {
+        fh += '<tr><td>'+f.label+'</td><td class="'+(f.pass?'pass':'fail')+'">'+(f.pass?'PASS':'FAIL')+'</td><td>'+f.val+'</td></tr>';
+    });
+    document.getElementById('filterTable').innerHTML = fh;
+
+    // 信号
+    var sh = '';
+    r.signals.forEach(function(s) {
+        sh += '<div class="card" style="text-align:center;background:'+(s.pass?'#0d3320':'#1a1217')+';border-color:'+(s.pass?'#238636':'#f85149')+'">' +
+            '<div style="font-size:20px">'+(s.pass?'O':'X')+'</div>' +
+            '<div style="font-size:11px;font-weight:600;color:'+(s.pass?'#3fb950':'#f85149')+'">'+s.label+'</div>' +
+            '<div style="font-size:10px;color:'+(s.pass?'#3fb950':'#f85149')+'">'+(s.pass?'PASS: ':'FAIL: ')+s.reason+'</div></div>';
+    });
+    document.getElementById('signalBox').innerHTML = sh;
+
+    // 深度分析
+    var mc = {3:'#3fb950',2:'#58a6ff',1:'#8b949e',0:'#8b949e','-2':'#f85149','-3':'#f85149'};
+    document.getElementById('moneyBox').innerHTML =
+        '<div style="font-size:18px;font-weight:700;color:'+(mc[r.moneyLevel]||'#8b949e')+'">'+r.moneySignal+'</div>' +
+        '<div style="font-size:11px;margin-top:4px">大单: '+r.bigOrder+'</div>';
+
+    var ss = '';
+    r.filters.forEach(function(f) {
+        ss += '<div style="display:flex;justify-content:space-between;font-size:10px;padding:2px 0;border-bottom:1px solid #21262d">' +
+            '<span>'+f.label+'</span><span style="color:'+(f.pass?'#3fb950':'#f85149')+'">'+(f.pass?'PASS':'FAIL')+'</span></div>';
+    });
+    document.getElementById('realtimeSigs').innerHTML = ss;
+
+    var ac = r.level==='A'?'#3fb950':(r.level==='B'?'#58a6ff':(r.level==='C'?'#f39c12':'#f85149'));
+    document.getElementById('adviceBox').innerHTML =
+        '<div class="advice" style="color:'+ac+'">'+r.level+'</div>' +
+        '<div style="font-size:16px;font-weight:700;color:'+ac+'">'+r.action+'</div><div style="font-size:11px;color:#8b949e;margin-top:4px">'+r.verdict+'</div>';
+
+    // 状态栏
+    document.getElementById('status').innerHTML =
+        '<span class="ci">'+symbol+'</span>' +
+        '<span class="'+(r.veto?'cg':'cb')+'">'+(r.veto?'可交易':'否决')+'</span>' +
+        '<span class="ci">评分:'+r.score+'</span>' +
+        '<span class="ci">'+new Date().toLocaleTimeString()+'</span>';
+}
+
+// ========== API 调用 ==========
+function analyze(sym) {
+    if (!sym) sym = document.getElementById('code').value.trim();
+    if (!sym) return;
+    symbol = sym;
+    document.getElementById('code').value = sym;
+
+    document.getElementById('verdictText').textContent = '...';
+    document.getElementById('verdictText').style.color = '#8b949e';
+    document.getElementById('verdictReason').textContent = '分析中...';
+
+    var codes = [sym.length===6 ? (sym[0]==='6'||sym[0]==='5'?'sh':'sz')+sym : sym];
+    codes.push('s_sh000001', 's_sz399006');  // 加指数
+
+    // 分两批获取(避免URL过长)
+    var stockCodes = [codes[0]];
+    var idxCodes = ['s_sh000001', 's_sz399006'];
+
+    Promise.all([
+        fetchSina(stockCodes),
+        fetchSina(idxCodes)
+    ]).then(function(results) {
+        var stockData = parseSina(results[0]);
+        var idxData = parseSina(results[1]);
+        idxCache = idxData;
+
+        var key = Object.keys(stockData)[0];
+        var r = analyzeStock(stockData[key], idxData);
+        render(r);
+
+        // 启动深度刷新
+        if (deepTimer) clearInterval(deepTimer);
+        deepTimer = setInterval(function() {
+            fetchSina(stockCodes).then(function(t) {
+                var d = parseSina(t);
+                var k = Object.keys(d)[0];
+                if (k && d[k]) {
+                    var nr = analyzeStock(d[k], idxCache);
+                    if (nr && !nr.fail) {
+                        nr.veto = currentResult ? currentResult.veto : nr.veto;
+                        render(nr);
+                        document.getElementById('deepLive').textContent = 'LIVE';
+                        document.getElementById('deepLive').style.color = '#3fb950';
+                        document.getElementById('deepT').textContent = new Date().toLocaleTimeString();
+                    }
+                }
+            }).catch(function() {
+                document.getElementById('deepLive').textContent = 'ERR';
+                document.getElementById('deepLive').style.color = '#f85149';
+            });
+        }, 2000);
+
+    }).catch(function(e) {
+        document.getElementById('verdictText').textContent = 'ERROR';
+        document.getElementById('verdictText').style.color = '#f85149';
+        document.getElementById('verdictReason').textContent = '请求失败: ' + e.message;
+    });
+}
+
+// ========== 全市场筛选 ==========
+function screenAll() {
+    document.getElementById('screenCard').style.display = 'block';
+    document.getElementById('screenInfo').textContent = '扫描中...';
+    document.getElementById('screenBody').innerHTML = '<tr><td colspan="10"><div class="ld"><div class="spinner"></div>正在扫描全市场...</div></td></tr>';
+
+    // 生成全市场代码池(~5000只采样)
+    var codes = [];
+    for (var i = 600000; i < 606000; i += 4) codes.push('sh'+i);
+    for (var i = 688000; i < 689500; i += 2) codes.push('sh'+i);
+    for (var i = 1; i < 4000; i += 3) codes.push('sz'+String(i).padStart(6,'0'));
+    for (var i = 300000; i < 302000; i += 2) codes.push('sz'+i);
+
+    // 分批获取
+    var batchSize = 80;
+    var allData = {};
+    var batches = [];
+    for (var i = 0; i < codes.length; i += batchSize) {
+        batches.push(codes.slice(i, i + batchSize));
+    }
+
+    var completed = 0;
+    function processBatch(idx) {
+        if (idx >= batches.length) {
+            // 全部完成, 筛选
+            var results = [];
+            for (var c in allData) {
+                var q = allData[c];
+                var r = analyzeStock(q, idxCache);
+                if (r && !r.fail && r.score >= 40) {
+                    r.code = c.replace('sh','').replace('sz','');
+                    r.name = q.name;
+                    results.push(r);
+                }
+            }
+            results.sort(function(a,b){return b.score - a.score});
+            results = results.slice(0, 25);
+
+            var html = '';
+            results.forEach(function(r, i) {
+                html += '<tr onclick="analyze(\''+r.code+'\')" style="cursor:pointer">' +
+                    '<td>'+(i+1)+'</td>' +
+                    '<td style="color:#58a6ff">'+r.code+'</td>' +
+                    '<td>'+r.name+'</td>' +
+                    '<td>'+r.price.toFixed(2)+'</td>' +
+                    '<td class="'+(r.pct>=0?'pass':'fail')+'">'+(r.pct>=0?'+':'')+r.pct.toFixed(1)+'%</td>' +
+                    '<td>'+r.ampl.toFixed(1)+'%</td>' +
+                    '<td>'+r.amt.toFixed(1)+'万</td>' +
+                    '<td style="color:'+(r.sigB?'#3fb950':'#f85149')+'">'+(r.sigB?'PASS':'--')+'</td>' +
+                    '<td style="color:'+(r.sigC?'#3fb950':'#f85149')+'">'+(r.sigC?'PASS':'--')+'</td>' +
+                    '<td style="font-weight:700;color:'+(r.score>=70?'#3fb950':(r.score>=50?'#f39c12':'#f85149'))+'">'+r.score+'</td>' +
+                    '</tr>';
+            });
+            document.getElementById('screenBody').innerHTML = html;
+            document.getElementById('screenInfo').textContent = '扫描'+Object.keys(allData).length+'只 | 结果'+results.length+'只';
+            return;
+        }
+
+        var batch = batches[idx];
+        fetchSina(batch).then(function(text) {
+            var data = parseSina(text);
+            for (var k in data) allData[k] = data[k];
+            completed++;
+            document.getElementById('screenInfo').textContent = '已扫'+(idx*batchSize)+'/'+codes.length+'...';
+            processBatch(idx + 1);  // 继续下一批
+        }).catch(function() {
+            processBatch(idx + 1);
+        });
+    }
+
+    processBatch(0);
+}
+
+// 启动
+window.onload = function() {
+    analyze('002230');
+};
+</script>
+</body>
+</html>
